@@ -14,9 +14,9 @@ To run the tool with default settings (10 parallel requests), simply run:
 $ ./myhttp http://example.com https://google.com http://github.com
 ```
 
-To run the tool with a maximum of 5 parallel requests and verbose output, run:
+To run the tool with a maximum of 5 parallel requests, run:
 ```
-$ ./myhttp -parallel 5 -v http://example.com https://google.com http://github.com
+$ ./myhttp -parallel 5 http://example.com https://google.com http://github.com
 ```
 
 ### Building and Running the Tool
