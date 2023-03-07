@@ -1,6 +1,6 @@
 BINARY_NAME="myhttp"
 
-all : lint test build
+all : lint build test
 
 build:
 	go build -o $(BINARY_NAME) cmd/main.go

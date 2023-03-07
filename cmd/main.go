@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"myhttp"
@@ -28,8 +27,9 @@ func main() {
 	s := myhttp.New(*fParallel)
 	defer s.Close()
 
+	ctx, cancel := context.WithCancel(context.Background())
 	// use error group to process input and output and process goroutines
-	g, ctx := errgroup.WithContext(context.Background())
+	g, ctx := errgroup.WithContext(ctx)
 
 	// at this point run doesn't return any errors
 	g.Go(func() error {
@@ -49,7 +49,8 @@ func main() {
 		left := len(urlArgs)
 		for {
 			if left == 0 {
-				return errors.New("no more urls left")
+				cancel()
+				return nil
 			}
 
 			select {
@@ -60,13 +61,16 @@ func main() {
 			case resp := <-s.Recv():
 				left--
 				if resp.Err == nil {
-					fmt.Println(resp.OriginWithScheme, resp.Encoded)
+					fmt.Println(resp.URL, resp.GetHexString())
 					continue
 				}
-				fmt.Printf("could not encode %s: %s\n", resp.OriginWithScheme, resp.Err)
+				fmt.Printf("could not encode %s: %s\n", resp.URL, resp.Err)
 			}
 		}
 	})
 
-	_ = g.Wait()
+	err := g.Wait()
+	if err != nil {
+		fmt.Println("[debug] done with err:", err)
+	}
 }
