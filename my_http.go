@@ -12,30 +12,33 @@ import (
 // any long than this some browsers won’t be able to load your page.
 const maxURLLen = 2048
 
+// Response struct represents the result of a URL encoding operation
 type Response struct {
 	OriginWithScheme string
 	Encoded          string
 	Err              error
 }
 
+// MyHTTP struct represents myhttp tool. It contains a pool of worker goroutines
+// to generate MD5 hash for multiple URLs concurrently.
 type MyHTTP struct {
 	maxWorkers int
 	inputCh    chan string
 	outputCh   chan *Response
 }
 
+// Send sends an input URL to the input channel of MyHTTP struct.
 func (m *MyHTTP) Send(input string) {
 	m.inputCh <- input
 }
 
+// Recv returns a receive-only channel of pointers to Response structs.
+// It allows clients of `MyHTTP` to receive responses from the worker goroutines.
 func (m *MyHTTP) Recv() <-chan *Response {
 	return m.outputCh
 }
 
-func (m *MyHTTP) GetOutputCh() <-chan *Response {
-	return m.outputCh
-}
-
+// New is a constructor for `MyHTTP`
 func New(parallel int) *MyHTTP {
 	return &MyHTTP{
 		maxWorkers: parallel,
@@ -44,6 +47,7 @@ func New(parallel int) *MyHTTP {
 	}
 }
 
+// Run URL processing: read from the input channel, process
 func (m *MyHTTP) Run(ctx context.Context) {
 	// this buffered channel will block at the concurrency limit
 	semaphoreChan := make(chan struct{}, m.maxWorkers)
@@ -57,37 +61,35 @@ func (m *MyHTTP) Run(ctx context.Context) {
 		// write commands one by one
 		case originURL := <-m.inputCh:
 			go func(semCh chan struct{}) {
-				m.process(semCh, originURL)
+				// use semaphoreChan to control number of concurrent urls processed
+				semCh <- struct{}{}
+				defer func() { <-semCh }()
+				resp := m.process(originURL)
+				m.outputCh <- resp
 			}(semaphoreChan)
 		}
 	}
 }
 
-func (m *MyHTTP) process(semCh chan struct{}, originURL string) {
-	// use semaphoreChan to control number of concurrent urls processed
-	semCh <- struct{}{}
-	defer func() { <-semCh }()
-
+func (m *MyHTTP) process(originURL string) *Response {
 	// make sure url is valid before getting md5 hash for it
 	updatedURL, err := m.validateAndUpdate(originURL)
 	if err != nil {
-		m.outputCh <- &Response{
+		return &Response{
 			OriginWithScheme: originURL,
 			Err:              err,
 		}
-		return
 	}
 
 	md5Hash, err := m.encodeMD5(updatedURL)
 	if err != nil {
-		m.outputCh <- &Response{
+		return &Response{
 			OriginWithScheme: updatedURL,
 			Err:              err,
 		}
-		return
 	}
 
-	m.outputCh <- &Response{
+	return &Response{
 		OriginWithScheme: updatedURL,
 		Encoded:          md5Hash,
 	}
